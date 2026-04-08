@@ -8,9 +8,10 @@ from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-CLE_API = "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"
-EMAIL = "antoine.huber13@gmail.com"
-MOT_DE_PASSE_GMAIL = "wmox zfvh nizg cahh"
+import os
+CLE_API = os.environ.get("ANTHROPIC_API_KEY", "")
+EMAIL = os.environ.get("EMAIL", "")
+MOT_DE_PASSE_GMAIL = os.environ.get("GMAIL_PASSWORD", "")
 
 client = anthropic.Anthropic(api_key=CLE_API)
 
