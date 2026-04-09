@@ -8,14 +8,17 @@ from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-# Configuration
-CLE_API = "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"
-EMAIL = "antoine.huber13@gmail.com"
-MOT_DE_PASSE_GMAIL = "wmox zfvh nizg cahh"
+# Configuration — fonctionne en local ET sur Streamlit Cloud
+if "ANTHROPIC_API_KEY" in st.secrets:
+    CLE_API = st.secrets["ANTHROPIC_API_KEY"]
+    EMAIL = st.secrets["EMAIL"]
+    MOT_DE_PASSE_GMAIL = st.secrets["GMAIL_PASSWORD"]
+else:
+    CLE_API = "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"
+    EMAIL = "antoine.huber13@gmail.com"
+    MOT_DE_PASSE_GMAIL = "wmox zfvh nizg cahh"
 
-client = anthropic.Anthropic(api_key=CLE_API.strip())
-
-client = anthropic.Anthropic(api_key=CLE_API.strip())
+client = anthropic.Anthropic(api_key=CLE_API)
 
 FICHIER_PROFIL = "profil.json"
 FICHIER_HISTORIQUE = "historique.json"
