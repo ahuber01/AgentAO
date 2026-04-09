@@ -80,7 +80,7 @@ def recuperer_ao_attribues(codes_dep, mots_cles):
     params = {
         "limit": 10,
         "order_by": "dateparution desc",
-        "where": f"({filtre_zone}) and ({filtre_mots}) and dateparution >= '{date_limite}' and type_avis='ATTRIBUTION'"
+        "where": f"({filtre_zone}) and ({filtre_mots}) and dateparution >= '{date_limite}' and type_avis like '%10%'"
     }
     try:
         data = requests.get(url, params=params, timeout=10).json()
