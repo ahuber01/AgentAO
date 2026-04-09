@@ -40,21 +40,23 @@ def sauvegarder_historique(ids):
 
 # Sources AO
 def recuperer_boamp(codes_dep, mots_cles):
+    from datetime import datetime, timedelta
+    date_limite = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
     filtre_zone = " or ".join([f"code_departement='{c}'" for c in codes_dep])
     filtre_mots = " or ".join([f"objet like '%{m}%'" for m in mots_cles])
     url = "https://www.boamp.fr/api/explore/v2.1/catalog/datasets/boamp/records"
     params = {
         "limit": 20,
         "order_by": "dateparution desc",
-        "where": f"({filtre_zone}) and ({filtre_mots})"
+        "where": f"({filtre_zone}) and ({filtre_mots}) and dateparution >= '{date_limite}'"
     }
     try:
         data = requests.get(url, params=params, timeout=10).json()
         aos = []
         for record in data.get("results", []):
-            date_limite = record.get("datelimitereponse", "")
+            date_limite_rep = record.get("datelimitereponse", "")
             date_parution = record.get("dateparution", "")
-            delai = (datetime.fromisoformat(date_limite[:10]) - datetime.now()).days if date_limite else 21
+            delai = (datetime.fromisoformat(date_limite_rep[:10]) - datetime.now()).days if date_limite_rep else 21
             parution = datetime.fromisoformat(date_parution[:10]).strftime("%d/%m/%Y") if date_parution else "Inconnue"
             aos.append({
                 "id": record.get("id", ""),
@@ -66,6 +68,46 @@ def recuperer_boamp(codes_dep, mots_cles):
                 "parution": parution
             })
         return aos
+    except:
+        return []
+
+def recuperer_ao_attribues(codes_dep, mots_cles):
+    from datetime import datetime, timedelta
+    date_limite = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    filtre_zone = " or ".join([f"code_departement='{c}'" for c in codes_dep])
+    filtre_mots = " or ".join([f"objet like '%{m}%'" for m in mots_cles])
+    url = "https://www.boamp.fr/api/explore/v2.1/catalog/datasets/boamp/records"
+    params = {
+        "limit": 10,
+        "order_by": "dateparution desc",
+        "where": f"({filtre_zone}) and ({filtre_mots}) and dateparution >= '{date_limite}' and type_avis='ATTRIBUTION'"
+    }
+    try:
+        data = requests.get(url, params=params, timeout=10).json()
+        attribues = []
+        for record in data.get("results", []):
+            donnees = record.get("donnees", {})
+            montant = "Non communiqué"
+            titulaire = "Non communiqué"
+            try:
+                if isinstance(donnees, dict):
+                    titulaires = donnees.get("ATTRIBUTION", {}).get("titulaires", [])
+                    if titulaires and len(titulaires) > 0:
+                        titulaire = titulaires[0].get("denomination", "Non communiqué")
+                    valeur = donnees.get("ATTRIBUTION", {}).get("valeur", {})
+                    if valeur:
+                        montant = f"{valeur.get('montant', 'Non communiqué')} €"
+            except:
+                pass
+            attribues.append({
+                "titre": record.get("objet", "Sans titre")[:120],
+                "acheteur": record.get("nomacheteur", ""),
+                "titulaire": titulaire,
+                "montant": montant,
+                "url": record.get("url_avis", ""),
+                "parution": record.get("dateparution", "")[:10]
+            })
+        return attribues
     except:
         return []
 
@@ -360,3 +402,22 @@ if st.button("🚀 Lancer l'analyse"):
                         analyse = analyser(ao)
                         st.info(analyse)
                     st.divider()
+                    # Section AO attribués
+st.divider()
+st.subheader("📋 Marchés récemment attribués dans votre zone")
+st.caption("Suivez la concurrence — qui remporte quoi près de chez vous")
+
+attribues = recuperer_ao_attribues(codes, mots_recherche)
+
+if not attribues:
+    st.info("Aucun marché attribué récemment dans votre zone.")
+else:
+    for a in attribues:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown(f"**{a['titre']}**")
+            st.caption(f"🏢 Acheteur : {a['acheteur']} | 🏆 Attribué à : **{a['titulaire']}** | 💰 Montant : **{a['montant']}**")
+            st.markdown(f"[Voir le marché]({a['url']})")
+        with col2:
+            st.caption(f"📆 {a['parution']}")
+        st.divider()
