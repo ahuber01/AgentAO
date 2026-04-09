@@ -8,12 +8,14 @@ from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-import os
-CLE_API = os.environ.get("ANTHROPIC_API_KEY", "")
-EMAIL = os.environ.get("EMAIL", "")
-MOT_DE_PASSE_GMAIL = os.environ.get("GMAIL_PASSWORD", "")
+# Configuration
+CLE_API = "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"
+EMAIL = "antoine.huber13@gmail.com"
+MOT_DE_PASSE_GMAIL = "wmox zfvh nizg cahh"
 
-client = anthropic.Anthropic(api_key=CLE_API)
+client = anthropic.Anthropic(api_key=CLE_API.strip())
+
+client = anthropic.Anthropic(api_key=CLE_API.strip())
 
 FICHIER_PROFIL = "profil.json"
 FICHIER_HISTORIQUE = "historique.json"
@@ -38,44 +40,178 @@ def sauvegarder_historique(ids):
     with open(FICHIER_HISTORIQUE, "w") as f:
         json.dump(ids, f)
 
+# Sources AO
+def recuperer_boamp(codes_dep, mots_cles):
+    filtre_zone = " or ".join([f"code_departement='{c}'" for c in codes_dep])
+    filtre_mots = " or ".join([f"objet like '%{m}%'" for m in mots_cles])
+    url = "https://www.boamp.fr/api/explore/v2.1/catalog/datasets/boamp/records"
+    params = {
+        "limit": 20,
+        "order_by": "dateparution desc",
+        "where": f"({filtre_zone}) and ({filtre_mots})"
+    }
+    try:
+        data = requests.get(url, params=params, timeout=10).json()
+        aos = []
+        for record in data.get("results", []):
+            date_limite = record.get("datelimitereponse", "")
+            date_parution = record.get("dateparution", "")
+            delai = (datetime.fromisoformat(date_limite[:10]) - datetime.now()).days if date_limite else 21
+            parution = datetime.fromisoformat(date_parution[:10]).strftime("%d/%m/%Y") if date_parution else "Inconnue"
+            aos.append({
+                "id": record.get("id", ""),
+                "titre": record.get("objet", "Sans titre")[:120],
+                "acheteur": record.get("nomacheteur", ""),
+                "url": record.get("url_avis", ""),
+                "source": "BOAMP",
+                "delai": max(delai, 0),
+                "parution": parution
+            })
+        return aos
+    except:
+        return []
+
+def recuperer_aws_achat(mots_cles):
+    try:
+        mot = mots_cles[0] if mots_cles else "travaux"
+        url = f"https://www.aws-achat.com/flux/rss?q={mot}&type=AO"
+        import xml.etree.ElementTree as ET
+        response = requests.get(url, timeout=10)
+        root = ET.fromstring(response.content)
+        aos = []
+        for item in root.findall(".//item")[:10]:
+            titre = item.find("title")
+            lien = item.find("link")
+            date = item.find("pubDate")
+            if titre is not None:
+                aos.append({
+                    "id": lien.text if lien is not None else titre.text,
+                    "titre": titre.text[:120] if titre.text else "Sans titre",
+                    "acheteur": "AWS Achat",
+                    "url": lien.text if lien is not None else "",
+                    "source": "AWS Achat",
+                    "delai": 21,
+                    "parution": date.text[:10] if date is not None else "Inconnue"
+                })
+        return aos
+    except:
+        return []
+
+def recuperer_ted(mots_cles):
+    try:
+        mot = "+".join(mots_cles[:2]) if mots_cles else "travaux"
+        url = f"https://ted.europa.eu/api/v3.0/notices/search?q={mot}&scope=3&fields=title,url,publicationDate,buyer&pageSize=10&page=1"
+        data = requests.get(url, timeout=10).json()
+        aos = []
+        for notice in data.get("notices", []):
+            aos.append({
+                "id": notice.get("id", ""),
+                "titre": notice.get("title", {}).get("fr", notice.get("title", {}).get("en", "Sans titre"))[:120],
+                "acheteur": notice.get("buyer", {}).get("name", "Europe"),
+                "url": f"https://ted.europa.eu/udl?uri=TED:NOTICE:{notice.get('id', '')}:TEXT:FR:HTML",
+                "source": "TED Europe",
+                "delai": 30,
+                "parution": notice.get("publicationDate", "")[:10]
+            })
+        return aos
+    except:
+        return []
+
 profil_sauvegarde = charger_profil()
 
-st.title("🏗️ Agent AO — Appels d'offres BTP")
-st.subheader("Configurez votre profil entreprise")
+# Interface
+if os.path.exists("LOGO_AHead_BTP.png"):
+    st.image("LOGO_AHead_BTP.png", width=250)
+else:
+    st.title("🏗️ AHead BTP")
+st.subheader("Votre radar d'appels d'offres — Détectez. Analysez. Remportez.")
+st.divider()
 
 email_entreprise = st.text_input(
     "Votre email",
-    value=profil_sauvegarde["email"] if profil_sauvegarde else "",
+    value=profil_sauvegarde.get("email", "") if profil_sauvegarde else "",
     placeholder="contact@entreprise.fr"
 )
 
-metiers = st.multiselect(
-    "Vos corps de métier",
-    ["VRD", "Terrassement", "Aménagement urbain", "Gros œuvre", "Génie civil", "Fondations spéciales", "Réseaux"],
-    default=profil_sauvegarde["metiers"] if profil_sauvegarde else ["VRD", "Terrassement"]
+st.markdown("**Vos corps de métier**")
+col1, col2 = st.columns(2)
+
+metiers_tp = [
+    "Voirie / VRD", "Terrassement", "Assainissement",
+    "Réseaux eau potable", "Aménagement urbain", "Génie civil",
+    "Fondations spéciales", "Démolition", "Enrobés / chaussées",
+    "Espaces verts", "Drainage / bassins"
+]
+metiers_bat = [
+    "Gros œuvre / maçonnerie", "Électricité / courants forts",
+    "Plomberie / sanitaires", "Chauffage / CVC",
+    "Menuiserie / charpente", "Peinture / revêtements",
+    "Carrelage / sols", "Couverture / toiture",
+    "Isolation / étanchéité", "Serrurerie / métallerie"
+]
+
+metiers_selectionnes = profil_sauvegarde.get("metiers", []) if profil_sauvegarde else []
+
+with col1:
+    st.markdown("*Travaux publics & génie civil*")
+    metiers_tp_choisis = [m for m in metiers_tp if st.checkbox(m, value=m in metiers_selectionnes, key=f"tp_{m}")]
+
+with col2:
+    st.markdown("*Bâtiment & second œuvre*")
+    metiers_bat_choisis = [m for m in metiers_bat if st.checkbox(m, value=m in metiers_selectionnes, key=f"bat_{m}")]
+
+metiers = metiers_tp_choisis + metiers_bat_choisis
+
+mots_cles_libres = st.text_input(
+    "Mots-clés techniques supplémentaires (séparés par des virgules)",
+    value=profil_sauvegarde.get("mots_cles_libres", "") if profil_sauvegarde else "",
+    placeholder="micro-pieux, paroi berlinoise, béton désactivé..."
 )
 
 zones = st.multiselect(
-    "Votre zone géographique",
+    "Zone géographique",
     [
         "67 — Bas-Rhin", "68 — Haut-Rhin", "57 — Moselle",
         "75 — Paris", "69 — Rhône", "13 — Bouches-du-Rhône",
         "31 — Haute-Garonne", "33 — Gironde", "44 — Loire-Atlantique",
         "59 — Nord", "76 — Seine-Maritime", "38 — Isère",
-        "34 — Hérault", "06 — Alpes-Maritimes"
+        "34 — Hérault", "06 — Alpes-Maritimes", "54 — Meurthe-et-Moselle",
+        "67 — Bas-Rhin", "25 — Doubs", "90 — Territoire de Belfort"
     ],
-    default=profil_sauvegarde["zones"] if profil_sauvegarde else ["67 — Bas-Rhin", "68 — Haut-Rhin"]
+    default=profil_sauvegarde.get("zones", ["67 — Bas-Rhin", "68 — Haut-Rhin"]) if profil_sauvegarde else ["67 — Bas-Rhin", "68 — Haut-Rhin"]
+)
+
+type_moa = st.multiselect(
+    "Type de maître d'ouvrage",
+    ["Commune / Mairie", "Département", "Région", "État / Ministère", "Bailleur social", "Établissement public", "Tous types"],
+    default=profil_sauvegarde.get("type_moa", ["Tous types"]) if profil_sauvegarde else ["Tous types"]
+)
+
+variantes = st.radio(
+    "Variantes acceptées dans l'AO ?",
+    ["Indifférent", "Oui — je veux des AO qui autorisent les variantes", "Non — je veux des AO sans variantes"],
+    index=profil_sauvegarde.get("variantes_index", 0) if profil_sauvegarde else 0
+)
+
+duree_min, duree_max = st.slider(
+    "Durée du chantier (mois)",
+    min_value=1,
+    max_value=24,
+    value=(
+        profil_sauvegarde.get("duree_min", 1) if profil_sauvegarde else 1,
+        profil_sauvegarde.get("duree_max", 12) if profil_sauvegarde else 12
+    )
 )
 
 budget_min, budget_max = st.slider(
     "Budget cible (€)",
-    min_value=100000,
-    max_value=5000000,
+    min_value=50000,
+    max_value=10000000,
     value=(
-        profil_sauvegarde["budget_min"] if profil_sauvegarde else 500000,
-        profil_sauvegarde["budget_max"] if profil_sauvegarde else 2000000
+        profil_sauvegarde.get("budget_min", 500000) if profil_sauvegarde else 500000,
+        profil_sauvegarde.get("budget_max", 2000000) if profil_sauvegarde else 2000000
     ),
-    step=100000,
+    step=50000,
     format="%d €"
 )
 
@@ -83,94 +219,87 @@ delai_min = st.slider(
     "Délai minimum de réponse (jours)",
     min_value=5,
     max_value=60,
-    value=profil_sauvegarde["delai_min"] if profil_sauvegarde else 15
+    value=profil_sauvegarde.get("delai_min", 15) if profil_sauvegarde else 15
+)
+
+sources = st.multiselect(
+    "Sources AO à surveiller",
+    ["BOAMP", "AWS Achat", "TED Europe"],
+    default=profil_sauvegarde.get("sources", ["BOAMP"]) if profil_sauvegarde else ["BOAMP"]
 )
 
 if profil_sauvegarde:
     st.success("✅ Profil chargé automatiquement !")
 
-if st.button("🚀 Lancer l'analyse et envoyer le rapport"):
+if st.button("🚀 Lancer l'analyse"):
     if not email_entreprise:
         st.error("Veuillez entrer votre email !")
-    elif not metiers:
-        st.error("Veuillez sélectionner au moins un métier !")
+    elif not metiers and not mots_cles_libres:
+        st.error("Veuillez sélectionner au moins un métier ou entrer des mots-clés !")
     elif not zones:
         st.error("Veuillez sélectionner au moins une zone !")
     else:
         sauvegarder_profil({
             "email": email_entreprise,
             "metiers": metiers,
+            "mots_cles_libres": mots_cles_libres,
             "zones": zones,
+            "type_moa": type_moa,
+            "variantes_index": ["Indifférent", "Oui — je veux des AO qui autorisent les variantes", "Non — je veux des AO sans variantes"].index(variantes),
+            "duree_min": duree_min,
+            "duree_max": duree_max,
             "budget_min": budget_min,
             "budget_max": budget_max,
-            "delai_min": delai_min
+            "delai_min": delai_min,
+            "sources": sources
         })
 
         with st.spinner("Analyse des AO en cours..."):
 
             profil = {
                 "metiers": metiers,
+                "mots_cles_libres": [m.strip() for m in mots_cles_libres.split(",") if m.strip()],
                 "budget_min": budget_min,
                 "budget_max": budget_max,
-                "delai_min": delai_min
+                "delai_min": delai_min,
+                "duree_min": duree_min,
+                "duree_max": duree_max,
+                "variantes": variantes,
+                "type_moa": type_moa
             }
-
-            historique = charger_historique()
 
             codes = [z.split(" — ")[0] for z in zones]
-            filtre_zone = " or ".join([f"code_departement='{c}'" for c in codes])
+            mots_recherche = metiers + profil["mots_cles_libres"]
+            if not mots_recherche:
+                mots_recherche = ["travaux"]
 
-            url = "https://www.boamp.fr/api/explore/v2.1/catalog/datasets/boamp/records"
-            params = {
-                "limit": 20,
-                "order_by": "dateparution desc",
-                "where": f"({filtre_zone}) and (objet like '%voirie%' or objet like '%VRD%' or objet like '%terrassement%' or objet like '%réseau%' or objet like '%assainissement%' or objet like '%chaussée%' or objet like '%travaux publics%' or objet like '%enrobés%' or objet like '%canalisations%' or objet like '%réhabilitation%' or objet like '%aménagement%' or objet like '%drainage%' or objet like '%trottoir%' or objet like '%bitume%')"
-            }
-            data = requests.get(url, params=params).json()
-
+            historique = charger_historique()
             aos = []
-            nouveaux_ids = []
-            for record in data["results"]:
-                id_ao = record.get("id", "")
-                if id_ao in historique:
-                    continue
 
-                date_limite = record.get("datelimitereponse", "")
-                date_parution = record.get("dateparution", "")
-                if date_limite:
-                    delai = (datetime.fromisoformat(date_limite[:10]) - datetime.now()).days
-                else:
-                    delai = 21
-                if date_parution:
-                    parution = datetime.fromisoformat(date_parution[:10]).strftime("%d/%m/%Y")
-                else:
-                    parution = "Inconnue"
+            if "BOAMP" in sources:
+                aos += recuperer_boamp(codes, mots_recherche)
+            if "AWS Achat" in sources:
+                aos += recuperer_aws_achat(mots_recherche)
+            if "TED Europe" in sources:
+                aos += recuperer_ted(mots_recherche)
 
-                aos.append({
-                    "id": id_ao,
-                    "titre": record.get("objet", "Sans titre")[:100],
-                    "zone": record.get("code_departement", ""),
-                    "acheteur": record.get("nomacheteur", ""),
-                    "url": record.get("url_avis", ""),
-                    "budget": 1000000,
-                    "delai": max(delai, 0),
-                    "parution": parution
-                })
-                nouveaux_ids.append(id_ao)
+            aos = [ao for ao in aos if ao["id"] not in historique]
+            nouveaux_ids = [ao["id"] for ao in aos]
 
             if not aos:
                 st.info("Aucun nouvel AO depuis la dernière analyse !")
             else:
                 def scorer(ao):
                     score = 0
+                    tous_mots = profil["metiers"] + profil["mots_cles_libres"]
                     reponse = client.messages.create(
                         model="claude-haiku-4-5-20251001",
                         max_tokens=10,
-                        messages=[{"role": "user", "content": f"Est-ce que ce chantier correspond aux métiers {', '.join(profil['metiers'])} ? Réponds uniquement OUI ou NON : {ao['titre']}"}]
+                        messages=[{"role": "user", "content": f"Est-ce que ce chantier correspond aux metiers ou techniques suivants : {', '.join(tous_mots)} ? Reponds uniquement OUI ou NON : {ao['titre']}".encode('utf-8', errors='ignore').decode('utf-8')}]
                     )
                     if "OUI" in reponse.content[0].text.upper():
                         score += 40
-                    if profil["budget_min"] <= ao["budget"] <= profil["budget_max"]:
+                    if profil["budget_min"] <= 1000000 <= profil["budget_max"]:
                         score += 20
                     if ao["delai"] >= profil["delai_min"]:
                         score += 10
@@ -178,10 +307,14 @@ if st.button("🚀 Lancer l'analyse et envoyer le rapport"):
                     return score
 
                 def analyser(ao):
+                    tous_mots = profil["metiers"] + profil["mots_cles_libres"]
+                    contexte_variantes = ""
+                    if profil["variantes"] != "Indifférent":
+                        contexte_variantes = f" L'entreprise {'cherche des AO qui autorisent les variantes' if 'Oui' in profil['variantes'] else 'préfère des AO sans variantes'}."
                     reponse = client.messages.create(
                         model="claude-haiku-4-5-20251001",
                         max_tokens=250,
-                        messages=[{"role": "user", "content": f"En 3 lignes, analyse cet AO pour une entreprise de {', '.join(profil['metiers'])} : {ao['titre']}, délai {ao['delai']} jours. Estime le montant probable du marché en euros. Points forts et vigilance."}]
+                        messages=[{"role": "user", "content": f"En 3 lignes, analyse cet AO pour une entreprise spécialisée en {', '.join(tous_mots)} : {ao['titre']}, délai {ao['delai']} jours.{contexte_variantes} Estime le montant probable. Points forts et vigilance."}]
                     )
                     return reponse.content[0].text
 
@@ -223,7 +356,7 @@ if st.button("🚀 Lancer l'analyse et envoyer le rapport"):
 
                     st.markdown(f"### {couleur} {ao['titre']}")
                     st.markdown(badge, unsafe_allow_html=True)
-                    st.markdown(f"🏢 **{ao['acheteur']}** | 📅 Délai : **{ao['delai']} jours** | 📆 Publié le : **{ao['parution']}** | [📄 Voir l'AO]({ao['url']})")
+                    st.markdown(f"🏢 **{ao['acheteur']}** | 📅 Délai : **{ao['delai']} jours** | 📆 Publié le : **{ao['parution']}** | 🔗 Source : **{ao['source']}** | [📄 Voir l'AO]({ao['url']})")
 
                     if score >= 40:
                         analyse = analyser(ao)
