@@ -11,7 +11,7 @@ from email.mime.text import MIMEText
 # Configuration — fonctionne en local ET sur Streamlit Cloud
 CLE_API = st.secrets.get("ANTHROPIC_API_KEY", "")
 EMAIL = st.secrets.get("EMAIL", "antoine.huber13@gmail.com")
-MOT_DE_PASSE_GMAIL = st.secrets.get("GMAIL_PASSWORD", "")
+MOT_DE_PASSE_GMAIL = st.secrets.get("GMAIL_PASSWORD", "") 
 
 client = anthropic.Anthropic(api_key=CLE_API)
 
