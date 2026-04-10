@@ -160,11 +160,14 @@ def recuperer_ted(mots_cles):
 profil_sauvegarde = charger_profil()
 
 # Interface
-if os.path.exists("LOGO_AHead_BTP.png"):
-    st.image("LOGO_AHead_BTP.png", width=250)
-else:
-    st.title("🏗️ AHead BTP")
-st.subheader("Votre radar d'appels d'offres — Détectez. Analysez. Remportez.")
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    if os.path.exists("LOGO_AHead_BTP.png"):
+        st.image("LOGO_AHead_BTP.png", use_column_width=True)
+    else:
+        st.title("🏗️ AHead BTP")
+
+st.markdown("<h3 style='text-align: center; color: #666;'>Votre radar d'appels d'offres — Détectez. Analysez. Remportez.</h3>", unsafe_allow_html=True)
 st.divider()
 
 email_entreprise = st.text_input(
