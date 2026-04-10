@@ -172,7 +172,7 @@ st.divider()
 
 email_entreprise = st.text_input(
     "Votre email",
-    value=profil_sauvegarde.get("email", "") if profil_sauvegarde else "",
+    value="",
     placeholder="contact@entreprise.fr"
 )
 
