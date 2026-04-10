@@ -411,11 +411,6 @@ if st.button("🚀 Lancer l'analyse"):
                         st.info(analyse)
                     st.divider()
                     # Section AO attribués
-                    st.divider()
-                    st.subheader("📋 Marchés récemment attribués dans votre zone")
-                    st.caption("Suivez la concurrence — qui remporte quoi près de chez vous")
-
-                    attribues = recuperer_ao_attribues(codes, mots_recherche)
 
                     if afficher_attribues:
                     st.divider()
