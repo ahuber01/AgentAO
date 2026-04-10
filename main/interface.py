@@ -274,6 +274,11 @@ sources = st.multiselect(
 if profil_sauvegarde:
     st.success("✅ Profil chargé automatiquement !")
 
+afficher_attribues = st.checkbox(
+    "Afficher aussi les marchés récemment attribués dans ma zone",
+    value=True
+)
+
 if st.button("🚀 Lancer l'analyse"):
     if not email_entreprise:
         st.error("Veuillez entrer votre email !")
@@ -412,6 +417,11 @@ if st.button("🚀 Lancer l'analyse"):
 
                     attribues = recuperer_ao_attribues(codes, mots_recherche)
 
+                    if afficher_attribues:
+                    st.divider()
+                    st.subheader("📋 Marchés récemment attribués dans votre zone")
+                    st.caption("Suivez la concurrence — qui remporte quoi près de chez vous")
+                    attribues = recuperer_ao_attribues(codes, mots_recherche)
                     if not attribues:
                         st.info("Aucun marché attribué récemment dans votre zone.")
                     else:
