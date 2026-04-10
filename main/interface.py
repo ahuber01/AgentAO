@@ -413,19 +413,19 @@ if st.button("🚀 Lancer l'analyse"):
                     # Section AO attribués
 
                     if afficher_attribues:
-                    st.divider()
-                    st.subheader("📋 Marchés récemment attribués dans votre zone")
-                    st.caption("Suivez la concurrence — qui remporte quoi près de chez vous")
-                    attribues = recuperer_ao_attribues(codes, mots_recherche)
-                    if not attribues:
-                        st.info("Aucun marché attribué récemment dans votre zone.")
-                    else:
-                        for a in attribues:
-                            col1, col2 = st.columns([3, 1])
-                            with col1:
-                                st.markdown(f"**{a['titre']}**")
-                                st.caption(f"🏢 Acheteur : {a['acheteur']} | 🏆 Attribué à : **{a['titulaire']}** | 💰 Montant : **{a['montant']}**")
-                                st.markdown(f"[Voir le marché]({a['url']})")
-                            with col2:
-                                st.caption(f"📆 {a['parution']}")
-                            st.divider()
+                        st.divider()
+                        st.subheader("📋 Marchés récemment attribués dans votre zone")
+                        st.caption("Suivez la concurrence — qui remporte quoi près de chez vous")
+                        attribues = recuperer_ao_attribues(codes, mots_recherche)
+                        if not attribues:
+                            st.info("Aucun marché attribué récemment dans votre zone.")
+                        else:
+                            for a in attribues:
+                                col1, col2 = st.columns([3, 1])
+                                with col1:
+                                    st.markdown(f"**{a['titre']}**")
+                                    st.caption(f"🏢 Acheteur : {a['acheteur']} | 🏆 Attribué à : **{a['titulaire']}** | 💰 Montant : **{a['montant']}**")
+                                    st.markdown(f"[Voir le marché]({a['url']})")
+                                with col2:
+                                    st.caption(f"📆 {a['parution']}")
+                                    st.divider()
